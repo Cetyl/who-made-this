@@ -1,0 +1,151 @@
+<svg width="760" height="900" viewBox="0 0 760 900" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>Who Made This? architecture: weekly orphan AWS resource archaeology with a reversible Purgatory state</title>
+<desc>An EventBridge Scheduler rule fires a Scanner Lambda weekly. The Scanner does a read-only inventory of EC2 instances, EBS volumes, Elastic IPs and network interfaces, then queries CloudTrail Event history via LookupEvents to attribute each resource to the identity that created it within the free 90 day window, then computes a deterministic Orphan Score out of 100. Findings are written to a DynamoDB table. Amazon Nova Lite on Bedrock writes only the human summary paragraph and holds no AWS permissions. Amazon SES emails an HTML digest containing HMAC signed Keep and Send to Purgatory links. Clicking a link hits a Lambda Function URL that verifies the signature and expiry, then either marks the resource Keep and restarts it, or places it in Purgatory by stopping it, snapshotting its volumes and tagging a 30 day release date. A daily Enforcer Lambda reads state from DynamoDB, moves unanswered high scoring resources into Purgatory after the grace period, and after 30 days reports them as releasable. Nothing is ever deleted because the IAM roles contain no Delete or Terminate permissions.</desc>
+<defs>
+  <marker id="arrwmt" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#5b6472"/>
+  </marker>
+  <marker id="arrwmta" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#c9660a"/>
+  </marker>
+</defs>
+<style>
+  .bg { fill:#ffffff; }
+  .box { fill:#f4f5f7; stroke:#5b6472; stroke-width:1; }
+  .box-accent { fill:#fdeee0; stroke:#c9660a; stroke-width:1; }
+  .box-safe { fill:#eef6ee; stroke:#3d7a45; stroke-width:1; }
+  .box-note { fill:#ffffff; stroke:#9aa2ad; stroke-width:1; stroke-dasharray:4,3; }
+  .inner { fill:#ffffff; stroke:#9aa2ad; stroke-width:1; }
+  .t { font-family:Arial,Helvetica,sans-serif; font-size:12px; font-weight:600; fill:#1a1d21; text-anchor:middle; }
+  .s { font-family:Arial,Helvetica,sans-serif; font-size:10.5px; fill:#5b6472; text-anchor:middle; }
+  .lbl { font-family:Arial,Helvetica,sans-serif; font-size:9.5px; fill:#5b6472; text-anchor:middle; }
+  .arr { fill:none; stroke:#5b6472; stroke-width:1.5; marker-end:url(#arrwmt); }
+  .arrd { fill:none; stroke:#5b6472; stroke-width:1.4; stroke-dasharray:5,4; marker-end:url(#arrwmt); }
+  .arra { fill:none; stroke:#c9660a; stroke-width:1.75; marker-end:url(#arrwmta); }
+</style>
+
+<rect class="bg" x="0" y="0" width="760" height="900"/>
+
+<text x="380" y="22" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700" fill="#1a1d21">Who Made This? &#8212; orphan resource archaeology with a reversible Purgatory state</text>
+<text x="380" y="39" class="s">Weekly attribution from the free 90 day CloudTrail Event history. Nothing is ever deleted.</text>
+
+<!-- trigger -->
+<rect class="box" x="290" y="55" width="180" height="46" rx="3"/>
+<text x="380" y="74" class="t">EventBridge Scheduler</text>
+<text x="380" y="89" class="s">cron: Friday 18:00 IST</text>
+
+<path class="arr" d="M380,101 L380,128"/>
+
+<!-- scanner -->
+<rect class="box" x="205" y="130" width="350" height="114" rx="3"/>
+<text x="380" y="150" class="t">Scanner Lambda &#183; three passes</text>
+<rect class="inner" x="218" y="160" width="104" height="40" rx="2"/>
+<text x="270" y="177" class="t">1. Inventory</text>
+<text x="270" y="191" class="lbl">read-only</text>
+<rect class="inner" x="328" y="160" width="104" height="40" rx="2"/>
+<text x="380" y="177" class="t">2. Attribution</text>
+<text x="380" y="191" class="lbl">who created it</text>
+<rect class="inner" x="438" y="160" width="104" height="40" rx="2"/>
+<text x="490" y="177" class="t">3. Orphan Score</text>
+<text x="490" y="191" class="lbl">deterministic /100</text>
+<text x="380" y="221" class="s">Skips anything already marked KEEP or PURGATORY, so it never nags twice</text>
+<text x="380" y="236" class="lbl">Signals: no owner tag +25 &#183; cold attribution +25 &#183; idle shape +20 &#183; no IaC provenance +15 &#183; dead creator +15</text>
+
+<!-- left source -->
+<rect class="box" x="18" y="142" width="172" height="72" rx="3"/>
+<text x="104" y="161" class="t">Amazon EC2 APIs</text>
+<text x="104" y="177" class="s">DescribeInstances, Volumes,</text>
+<text x="104" y="191" class="s">Addresses, NetworkInterfaces</text>
+<text x="104" y="206" class="lbl">Describe only. No mutations.</text>
+<path class="arr" d="M190,178 L203,178"/>
+
+<!-- right source -->
+<rect class="box" x="570" y="142" width="176" height="72" rx="3"/>
+<text x="658" y="161" class="t">CloudTrail Event history</text>
+<text x="658" y="177" class="s">LookupEvents, 90 day window</text>
+<text x="658" y="191" class="s">on by default, no charge</text>
+<text x="658" y="206" class="lbl">throttled ~2 TPS, backed off</text>
+<path class="arr" d="M568,178 L557,178"/>
+
+<path class="arr" d="M380,246 L380,262"/>
+
+<!-- dynamodb -->
+<rect class="box" x="280" y="264" width="200" height="48" rx="3"/>
+<text x="380" y="283" class="t">Amazon DynamoDB</text>
+<text x="380" y="299" class="s">findings: state, score, signals</text>
+
+<!-- bedrock -->
+<path class="arr" d="M366,314 L212,336"/>
+<rect class="box-safe" x="110" y="338" width="180" height="58" rx="3"/>
+<text x="200" y="357" class="t">Bedrock: Nova Lite</text>
+<text x="200" y="372" class="s">writes the summary paragraph</text>
+<text x="200" y="387" class="lbl">no AWS permissions, decides nothing</text>
+
+<!-- ses -->
+<path class="arr" d="M292,367 L470,367"/>
+<rect class="box" x="472" y="338" width="180" height="58" rx="3"/>
+<text x="562" y="357" class="t">Amazon SES</text>
+<text x="562" y="372" class="s">HTML digest email</text>
+<text x="562" y="387" class="lbl">HMAC signed decision links</text>
+
+<path class="arr" d="M562,398 L562,424"/>
+
+<!-- inbox -->
+<rect class="box" x="462" y="426" width="200" height="52" rx="3"/>
+<text x="562" y="445" class="t">Your inbox</text>
+<text x="562" y="460" class="s">Keep &#160;|&#160; Send to Purgatory</text>
+<text x="562" y="473" class="lbl">links expire with the grace window</text>
+
+<path class="arr" d="M540,480 L440,506"/>
+
+<!-- decide -->
+<rect class="box" x="255" y="508" width="250" height="60" rx="3"/>
+<text x="380" y="527" class="t">Decide Lambda &#183; Function URL</text>
+<text x="380" y="542" class="s">verifies HMAC signature and expiry</text>
+<text x="380" y="557" class="lbl">AuthType NONE, the signed link is the credential</text>
+
+<path class="arr" d="M320,570 L210,606"/>
+<path class="arra" d="M440,570 L540,606"/>
+
+<!-- keep -->
+<rect class="box-safe" x="55" y="608" width="215" height="76" rx="3"/>
+<text x="162" y="627" class="t">KEEP</text>
+<text x="162" y="643" class="s">marked intentional, skipped</text>
+<text x="162" y="657" class="s">in every future scan</text>
+<text x="162" y="674" class="lbl">if it was in Purgatory, it restarts</text>
+
+<!-- purgatory -->
+<rect class="box-accent" x="430" y="608" width="255" height="76" rx="3"/>
+<text x="557" y="627" class="t">PURGATORY</text>
+<text x="557" y="643" class="s">stop instance &#183; snapshot volumes</text>
+<text x="557" y="657" class="s">tag whomadethis:release-after</text>
+<text x="557" y="674" class="lbl">reversible for 30 days, one click back</text>
+
+<!-- enforcer read line -->
+<path class="arrd" d="M278,288 L22,288 L22,742 L243,742"/>
+<text x="22" y="520" class="lbl" transform="rotate(-90 22,520)">daily: reads state from DynamoDB</text>
+
+<!-- enforcer -->
+<rect class="box" x="245" y="714" width="270" height="56" rx="3"/>
+<text x="380" y="733" class="t">Enforcer Lambda &#183; daily</text>
+<text x="380" y="748" class="s">grace expired with no reply = a decision</text>
+<text x="380" y="763" class="lbl">also ages Purgatory out after 30 days</text>
+
+<path class="arra" d="M517,742 L557,742 L557,690"/>
+<text x="600" y="716" class="lbl">no reply in 7 days</text>
+
+<path class="arr" d="M380,772 L380,804"/>
+
+<!-- releasable -->
+<rect class="box" x="230" y="806" width="270" height="58" rx="3"/>
+<text x="365" y="825" class="t">RELEASABLE report</text>
+<text x="365" y="840" class="s">emailed list of what a human may delete</text>
+<text x="365" y="855" class="lbl">30 days stopped, nobody claimed it</text>
+
+<!-- safety callout -->
+<rect class="box-note" x="512" y="806" width="234" height="58" rx="3"/>
+<text x="629" y="824" class="t">The safety property</text>
+<text x="629" y="839" class="s">No Delete* or Terminate* in any</text>
+<text x="629" y="853" class="s">IAM policy. Enforced, not promised.</text>
+
+</svg>

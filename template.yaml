@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Who Made This? Finds abandoned AWS resources, attributes them to a human via
+  CloudTrail Event history, and parks them in a reversible Purgatory state.
+  No IAM policy in this stack contains Delete* or Terminate*. That is the point.
+
+Parameters:
+  SenderEmail:
+    Type: String
+    Description: SES-verified sender address
+  RecipientEmail:
+    Type: String
+    Description: SES-verified recipient address
+  GraceDays:
+    Type: Number
+    Default: 7
+    Description: Days to wait for a reply before Purgatory becomes automatic
+  PurgatoryDays:
+    Type: Number
+    Default: 30
+    Description: Days a resource stays recoverable in Purgatory
+  HmacParamName:
+    Type: String
+    Default: /whomadethis/hmac-key
+    Description: SSM SecureString parameter holding the link-signing key
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 300
+    MemorySize: 512
+    Architectures: [arm64]
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref FindingsTable
+        HMAC_PARAM: !Ref HmacParamName
+        SENDER_EMAIL: !Ref SenderEmail
+        RECIPIENT_EMAIL: !Ref RecipientEmail
+        GRACE_DAYS: !Ref GraceDays
+        PURGATORY_DAYS: !Ref PurgatoryDays
+
+Resources:
+
+  FindingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: resourceId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: resourceId
+          KeyType: HASH
+
+  # ---- the decision endpoint -------------------------------------------
+  # AuthType NONE. The HMAC-signed link is the credential.
+  # Note the permission set: Stop, Start, CreateSnapshot, tags. No Delete.
+  DecideFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: decide.handler
+      Timeout: 60
+      FunctionUrlConfig:
+        AuthType: NONE
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FindingsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ec2:StopInstances
+                - ec2:StartInstances
+                - ec2:CreateSnapshot
+                - ec2:CreateTags
+                - ec2:DeleteTags
+                - ec2:DescribeVolumes
+                - ec2:DescribeInstances
+              Resource: '*'
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub
+                arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${HmacParamName}
+
+  # ---- the weekly scan --------------------------------------------------
+  ScannerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: scanner.handler
+      Timeout: 600
+      Environment:
+        Variables:
+          DECISION_BASE_URL: !GetAtt DecideFunctionUrl.FunctionUrl
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FindingsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ec2:DescribeInstances
+                - ec2:DescribeVolumes
+                - ec2:DescribeAddresses
+                - ec2:DescribeNetworkInterfaces
+                - cloudtrail:LookupEvents
+                - iam:GetRole
+                - iam:GetUser
+              Resource: '*'
+            - Effect: Allow
+              Action: ses:SendEmail
+              Resource: '*'
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub
+                arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${HmacParamName}
+      Events:
+        WeeklySweep:
+          Type: ScheduleV2          # EventBridge Scheduler
+          Properties:
+            ScheduleExpression: cron(30 12 ? * FRI *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Description: Friday 18:00 IST account archaeology
+
+  # ---- daily housekeeping ----------------------------------------------
+  EnforcerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: enforcer.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref FindingsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ec2:StopInstances
+                - ec2:StartInstances
+                - ec2:CreateSnapshot
+                - ec2:CreateTags
+                - ec2:DeleteTags
+                - ec2:DescribeVolumes
+                - ec2:DescribeInstances
+              Resource: '*'
+            - Effect: Allow
+              Action: ses:SendEmail
+              Resource: '*'
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub
+                arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${HmacParamName}
+      Events:
+        DailyCheck:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 3 * * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Description: Age out grace periods and Purgatory terms
+
+Outputs:
+  DecisionEndpoint:
+    Description: Signed-link decision endpoint
+    Value: !GetAtt DecideFunctionUrl.FunctionUrl
+  ScannerName:
+    Description: Invoke this by hand to run a scan now
+    Value: !Ref ScannerFunction
+  EnforcerName:
+    Value: !Ref EnforcerFunction
+  TableName:
+    Value: !Ref FindingsTable

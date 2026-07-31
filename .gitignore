@@ -1,0 +1,6 @@
+.aws-sam/
+.seeded-resources
+samconfig.toml
+__pycache__/
+*.pyc
+.DS_Store
