@@ -2,6 +2,8 @@
 
 An orphan AWS resource archaeologist with a reversible **Purgatory** state.
 
+
+
 Every quarter somebody has to open the AWS console and answer a question nobody
 can answer: is this still needed? There is a stopped instance from March, an
 unattached volume, three Elastic IPs pointing at nothing, and no `Owner` tag on
@@ -101,6 +103,21 @@ an expiry, and an HMAC-SHA256 signature over all three. The signing key lives in
 SSM Parameter Store as a SecureString (free for standard parameters, unlike
 Secrets Manager at $0.40/secret/month). Change one character of the signature
 and you get a 403.
+
+## Running for real
+
+A real weekly digest, deployed to `ap-south-1`, flagging real resources with
+real Orphan Scores and real CloudTrail-derived attribution:
+
+
+
+Clicking **Send to Purgatory** on a resource snapshots it and stops it, and says so:
+
+
+
+Clicking **Keep** marks it intentional and skips it in every future scan:
+
+
 
 ## Services used
 
