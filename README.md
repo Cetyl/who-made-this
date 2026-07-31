@@ -71,31 +71,8 @@ silence is stronger evidence of abandonment than any known creator. Hence
 
 ## Architecture
 
-```
-EventBridge Scheduler  (weekly cron, Fri 18:00 IST)
-        |
-        v
-  scanner Lambda ── EC2 Describe APIs (read-only inventory)
-        |         └─ CloudTrail LookupEvents (attribution, 90 days, free)
-        |            → Orphan Score (deterministic Python)
-        v
-   DynamoDB  (state: INFO | FLAGGED | KEEP | PURGATORY | RELEASABLE)
-        |
-        v
-   Amazon SES  →  digest email with HMAC-signed Keep / Purgatory links
-                        |
-                        v
-              decide Lambda (Function URL, AuthType NONE)
-                verifies HMAC-SHA256 signature + expiry
-                        |
-              ┌─────────┴──────────┐
-             KEEP              PURGATORY
-        skip forever      stop + snapshot + tag
+<img width="1024" height="1536" alt="Who did this" src="https://github.com/user-attachments/assets/5d6fb6c3-d4b4-4d7e-b99a-62245126d560" />
 
-EventBridge Scheduler (daily) → enforcer Lambda
-   grace expired with no reply → Purgatory
-   Purgatory term complete     → RELEASABLE report (human deletes)
-```
 
 **Authentication.** The decision links act on an AWS account with no login, so
 the link itself is the credential: each URL carries the resource id, the action,
